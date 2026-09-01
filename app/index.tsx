@@ -604,9 +604,11 @@ export default function HomeScreen() {
       <ScreenHeader title="About" onBack={() => setActiveScreen('APPEARANCE')} />
       
       <View style={{ alignItems: 'center', marginBottom: currentTheme.spacing.xl, marginTop: currentTheme.spacing.md }}>
-        <View style={{ width: 80, height: 80, backgroundColor: currentTheme.colors.accent, borderRadius: 20, marginBottom: 16, justifyContent: 'center', alignItems: 'center', ...currentTheme.shadow.card }}>
-          <Text style={{ color: '#FFF', fontSize: 32, fontWeight: 'bold' }}>QS</Text>
-        </View>
+        <Image 
+          source={require('../assets/images/aa-app-switcher-icon.png')} 
+          style={{ width: 80, height: 80, borderRadius: 20, marginBottom: 16 }} 
+          resizeMode="contain" 
+        />
         <Text style={[currentTypography.screenTitle, { textAlign: 'center', marginBottom: 8 }]}>AA App Switcher</Text>
         <Text style={[currentTypography.description, { textAlign: 'center', marginHorizontal: 20 }]}>
           Quickly switch between your favorite apps from anywhere on your Android device.
@@ -647,8 +649,18 @@ export default function HomeScreen() {
       <SettingsCard title="Version">
         <View style={{ paddingVertical: currentTheme.spacing.sm }}>
           <Text style={currentTypography.description}>Version 1.0.0</Text>
+          
+          <View style={{ marginTop: 20 }}>
+            <Text style={[currentTypography.label, { fontSize: 14, marginBottom: 4 }]}>Founder & Developer</Text>
+            <Text style={currentTypography.description}>Mohit Pratap Mehra</Text>
+          </View>
         </View>
       </SettingsCard>
+
+      <View style={{ alignItems: 'center', marginTop: 24, marginBottom: 40, opacity: 0.6 }}>
+        <Text style={[currentTypography.description, { fontSize: 12, textAlign: 'center' }]}>© 2026 Quick App Switcher</Text>
+        <Text style={[currentTypography.description, { fontSize: 12, textAlign: 'center' }]}>All rights reserved.</Text>
+      </View>
     </ScrollView>
   );
 
