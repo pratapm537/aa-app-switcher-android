@@ -1,0 +1,56 @@
+1<?xml version="1.0" encoding="utf-8"?>
+2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+3    package="expo.modules.quickappswitcheroverlay" >
+4
+5    <uses-sdk android:minSdkVersion="24" />
+6
+7    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+7-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:2:3-76
+7-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:2:20-73
+8    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+8-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:3:3-75
+8-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:3:20-72
+9    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+9-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:4:3-87
+9-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:4:20-84
+10    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+10-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:5:3-75
+10-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:5:20-72
+11    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
+11-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:6:3-76
+11-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:6:20-73
+12
+13    <queries>
+13-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:8:3-13:13
+14        <intent>
+14-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:9:5-12:14
+15            <action android:name="android.intent.action.MAIN" />
+15-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:10:7-59
+15-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:10:15-56
+16
+17            <category android:name="android.intent.category.LAUNCHER" />
+17-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:11:7-67
+17-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:11:17-64
+18        </intent>
+19    </queries>
+20
+21    <application>
+21-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:15:3-24:17
+22        <service
+22-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:16:5-23:15
+23            android:name="expo.modules.quickappswitcheroverlay.OverlayService"
+23-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:17:9-39
+24            android:exported="false"
+24-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:18:9-33
+25            android:foregroundServiceType="specialUse" >
+25-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:19:9-51
+26            <property
+26-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:20:7-22:56
+27                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+27-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:21:11-70
+28                android:value="Quick App Switcher Overlay" />
+28-->E:\Quick-App-Switcher\modules\overlay\android\src\main\AndroidManifest.xml:22:11-53
+29        </service>
+30    </application>
+31
+32</manifest>
