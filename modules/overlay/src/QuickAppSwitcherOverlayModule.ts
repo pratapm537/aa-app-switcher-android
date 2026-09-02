@@ -5,6 +5,7 @@ declare class QuickAppSwitcherOverlayModule extends NativeModule<{}> {
   requestOverlayPermission(): void;
   startOverlay(): void;
   stopOverlay(): void;
+  isOverlayRunning(): boolean;
   getHomeScreenBehavior(): "hide" | "show";
   setHomeScreenBehavior(value: "hide" | "show"): void;
   hasUsageAccess(): boolean;

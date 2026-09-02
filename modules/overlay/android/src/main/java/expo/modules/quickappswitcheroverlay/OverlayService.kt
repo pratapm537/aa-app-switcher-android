@@ -29,6 +29,11 @@ import android.util.Log
 import kotlin.math.abs
 
 class OverlayService : Service() {
+    companion object {
+        @JvmStatic
+        var isRunning = false
+    }
+
     private lateinit var windowManager: WindowManager
     private var overlayView: View? = null
 
@@ -115,6 +120,7 @@ class OverlayService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        isRunning = true
         
         val filter = IntentFilter("expo.modules.quickappswitcheroverlay.UPDATE_ICON_SIZE")
         filter.addAction("expo.modules.quickappswitcheroverlay.UPDATE_OPACITY")
@@ -720,6 +726,7 @@ class OverlayService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
+        isRunning = false
         isMonitoring = false
         handler.removeCallbacksAndMessages(null)
         try {

@@ -21,7 +21,7 @@ export default function HomeScreen() {
   const [selectedApps, setSelectedApps] = useState<string[]>([]);
   const [installedApps, setInstalledApps] = useState<{packageName: string, label: string, icon: string}[]>([]);
   const [isPickerVisible, setIsPickerVisible] = useState(false);
-  const [editingSlot, setEditingSlot] = useState<number | null>(null);
+  const [tempSelectedApps, setTempSelectedApps] = useState<string[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [onboardingState, setOnboardingState] = useState<OnboardingState>('CHECKING');
   const [errorMessage, setErrorMessage] = useState('');
@@ -31,6 +31,7 @@ export default function HomeScreen() {
   const onboardingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isNavigatingToSettings = useRef(false);
   const isReminderTimerActive = useRef(false);
+  const isPermissionAlertVisible = useRef(false);
   const [switcherStyle, setSwitcherStyle] = useState<'with_dock' | 'without_dock'>('with_dock');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [dockBackgroundColor, setDockBackgroundColor] = useState('#1C1C1E');
@@ -153,6 +154,9 @@ export default function HomeScreen() {
     }
     isReminderTimerActive.current = true;
     onboardingTimeoutRef.current = setTimeout(() => {
+      if (isPermissionAlertVisible.current) {
+        return;
+      }
       isReminderTimerActive.current = false;
       const perm = QuickAppSwitcherOverlayModule.checkOverlayPermission();
       let usagePerm = false;
@@ -276,12 +280,20 @@ export default function HomeScreen() {
     }
   };
 
+  const syncOverlayState = () => {
+    if (typeof QuickAppSwitcherOverlayModule.isOverlayRunning === 'function') {
+      setIsOverlayRunning(QuickAppSwitcherOverlayModule.isOverlayRunning());
+    }
+  };
+
   useEffect(() => {
     checkPermissions();
     loadPreferences();
+    syncOverlayState();
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active') {
         checkPermissions();
+        syncOverlayState();
         if (isReminderTimerActive.current) {
           startReminderTimer();
         }
@@ -362,15 +374,35 @@ export default function HomeScreen() {
           message = "Usage Access is currently OFF. Please enable it to activate App Switcher.";
         }
 
+        isPermissionAlertVisible.current = true;
         Alert.alert(title, message, [
+          {
+            text: "Cancel",
+            style: "cancel",
+            onPress: () => {
+              isPermissionAlertVisible.current = false;
+              if (isReminderTimerActive.current) {
+                startReminderTimer();
+              }
+            }
+          },
           {
             text: "OK",
             onPress: () => {
+              isPermissionAlertVisible.current = false;
               setOnboardingStep(!perm ? 1 : 2);
               setShowOnboarding(true);
             }
           }
-        ]);
+        ], {
+          cancelable: true,
+          onDismiss: () => {
+            isPermissionAlertVisible.current = false;
+            if (isReminderTimerActive.current) {
+              startReminderTimer();
+            }
+          }
+        });
         return;
       }
       startOverlay();
@@ -432,25 +464,28 @@ export default function HomeScreen() {
     }
   };
 
-  const handleAppSelected = (packageName: string) => {
-    if (editingSlot !== null) {
-      if (editingSlot > selectedApps.length) {
-        if (!selectedApps.includes(packageName) && selectedApps.length < 5) {
-          const newApps = [...selectedApps, packageName];
-          QuickAppSwitcherOverlayModule.saveSelectedApps(newApps);
-          setSelectedApps(newApps);
-        }
-      } else {
-        if (!selectedApps.includes(packageName) || selectedApps[editingSlot - 1] === packageName) {
-          QuickAppSwitcherOverlayModule.setSelectedApp(editingSlot, packageName);
-          const newApps = [...selectedApps];
-          newApps[editingSlot - 1] = packageName;
-          setSelectedApps(newApps);
-        }
-      }
+  const commitSelection = () => {
+    // Only save if the array contents actually changed
+    if (JSON.stringify(tempSelectedApps) !== JSON.stringify(selectedApps)) {
+      QuickAppSwitcherOverlayModule.saveSelectedApps(tempSelectedApps);
+      setSelectedApps(tempSelectedApps);
     }
     setIsPickerVisible(false);
-    setEditingSlot(null);
+    setSearchQuery('');
+  };
+
+  const toggleAppSelection = (packageName: string) => {
+    if (tempSelectedApps.includes(packageName)) {
+      // Remove it
+      setTempSelectedApps(tempSelectedApps.filter(p => p !== packageName));
+    } else {
+      // Add it
+      if (tempSelectedApps.length >= 5) {
+        Alert.alert("Maximum Apps Reached", "You can add up to 5 apps. Remove an app before adding another.", [{ text: "OK" }]);
+      } else {
+        setTempSelectedApps([...tempSelectedApps, packageName]);
+      }
+    }
   };
 
   const handleRemoveApp = (index: number) => {
@@ -617,7 +652,7 @@ export default function HomeScreen() {
               <TouchableOpacity 
                 style={[styles.previewAddButton, { marginLeft: selectedApps.length === 0 ? 0 : iconSpacing, borderColor: currentTheme.colors.textSecondary }]}
                 onPress={() => {
-                  setEditingSlot(selectedApps.length + 1);
+                  setTempSelectedApps([...selectedApps]);
                   setIsPickerVisible(true);
                 }}
                 activeOpacity={0.7}
@@ -893,12 +928,12 @@ export default function HomeScreen() {
   );
 
   const renderAppPickerModal = () => (
-    <Modal visible={isPickerVisible} animationType="slide" onRequestClose={() => { setIsPickerVisible(false); setSearchQuery(''); }}>
+    <Modal visible={isPickerVisible} animationType="slide" onRequestClose={commitSelection}>
       <SafeAreaView style={[styles.modalContainer, { backgroundColor: currentTheme.colors.background }]}>
         <View style={[styles.modalHeader, { borderBottomColor: currentTheme.colors.border }]}>
-          <Text style={[styles.modalTitle, { color: currentTheme.colors.textPrimary }]}>Select App</Text>
-          <TouchableOpacity onPress={() => { setIsPickerVisible(false); setSearchQuery(''); }}>
-            <Text style={styles.closeText}>Close</Text>
+          <Text style={[styles.modalTitle, { color: currentTheme.colors.textPrimary }]}>Select Apps</Text>
+          <TouchableOpacity onPress={commitSelection}>
+            <Text style={styles.closeText}>Done</Text>
           </TouchableOpacity>
         </View>
         
@@ -922,7 +957,6 @@ export default function HomeScreen() {
 
         <FlatList
           data={installedApps.filter(app => {
-            if (selectedApps.includes(app.packageName)) return false;
             const trimmedQuery = searchQuery.trim();
             if (trimmedQuery.length === 0) return true;
             return app.label.toLowerCase().includes(trimmedQuery.toLowerCase());
@@ -936,13 +970,16 @@ export default function HomeScreen() {
             </View>
           )}
           renderItem={({ item }) => (
-            <TouchableOpacity style={[styles.pickerRow, { backgroundColor: currentTheme.colors.surface, borderBottomColor: currentTheme.colors.background }]} onPress={() => { handleAppSelected(item.packageName); setSearchQuery(''); }}>
+            <TouchableOpacity style={[styles.pickerRow, { backgroundColor: currentTheme.colors.surface, borderBottomColor: currentTheme.colors.background }]} onPress={() => toggleAppSelection(item.packageName)}>
               {item.icon ? (
                 <Image source={{ uri: `data:image/png;base64,${item.icon}` }} style={styles.pickerIcon} />
               ) : (
                 <View style={[styles.pickerIconPlaceholder, { backgroundColor: currentTheme.colors.border }]} />
               )}
-              <Text style={[styles.pickerAppName, { color: currentTheme.colors.textPrimary }]}>{item.label}</Text>
+              <Text style={[styles.pickerAppName, { color: currentTheme.colors.textPrimary, flex: 1 }]}>{item.label}</Text>
+              {tempSelectedApps.includes(item.packageName) && (
+                <Text style={{ color: '#10B981', fontSize: 18, fontWeight: 'bold', marginRight: 10 }}>✓</Text>
+              )}
             </TouchableOpacity>
           )}
         />
