@@ -89,7 +89,7 @@ class QuickAppSwitcherOverlayModule : Module() {
     Function("getHomeScreenBehavior") { ->
       val context = appContext.reactContext
       val prefs = context?.getSharedPreferences("QuickAppSwitcherPrefs", android.content.Context.MODE_PRIVATE)
-      return@Function prefs?.getString("home_screen_behavior", "hide") ?: "hide"
+      return@Function prefs?.getString("home_screen_behavior", "show") ?: "show"
     }
 
     Function("setHomeScreenBehavior") { value: String ->

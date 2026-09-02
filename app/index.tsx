@@ -14,7 +14,7 @@ type ScreenState = 'SETTINGS' | 'APPEARANCE' | 'APPS' | 'ABOUT' | 'PRIVACY';
 export default function HomeScreen() {
   const [hasPermission, setHasPermission] = useState(false);
   const [hasUsageAccess, setHasUsageAccess] = useState(false);
-  const [homeBehavior, setHomeBehavior] = useState('hide');
+  const [homeBehavior, setHomeBehavior] = useState('show');
   const [iconSize, setIconSize] = useState<"small" | "medium" | "large">('small');
   const [overlayOpacity, setOverlayOpacity] = useState<number>(0.85);
   const [iconSpacing, setIconSpacing] = useState<number>(8);
@@ -221,7 +221,7 @@ export default function HomeScreen() {
   };
 
   const loadPreferences = () => {
-    let behavior: "hide" | "show" = 'hide';
+    let behavior: "hide" | "show" = 'show';
     if (typeof QuickAppSwitcherOverlayModule.getHomeScreenBehavior === 'function') {
       behavior = QuickAppSwitcherOverlayModule.getHomeScreenBehavior();
     }

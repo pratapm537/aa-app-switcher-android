@@ -230,7 +230,7 @@ class OverlayService : Service() {
         val launcherApp = getDefaultLauncherPackage()
 
         val prefs = getSharedPreferences("QuickAppSwitcherPrefs", Context.MODE_PRIVATE)
-        val homeBehavior = prefs.getString("home_screen_behavior", "hide") ?: "hide"
+        val homeBehavior = prefs.getString("home_screen_behavior", "show") ?: "show"
 
         val shouldShow = when {
             homeBehavior == "show" -> true
