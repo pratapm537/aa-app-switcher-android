@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, AppState, StyleSheet, ActivityIndicator, ScrollView, Modal, FlatList, Image, TextInput, Switch, SafeAreaView, Animated, Dimensions, TouchableWithoutFeedback, Easing, BackHandler } from 'react-native';
+import { View, Text, TouchableOpacity, AppState, StyleSheet, ActivityIndicator, ScrollView, Modal, FlatList, Image, TextInput, Switch, SafeAreaView, Animated, Dimensions, TouchableWithoutFeedback, Easing, BackHandler, Alert } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import QuickAppSwitcherOverlayModule from '../modules/overlay/src/QuickAppSwitcherOverlayModule';
 import { Theme, LightTheme, DarkTheme, ThemeContext, getTypography } from '../theme/theme';
 import { ScreenHeader } from '../components/ui/ScreenHeader';
@@ -7,7 +8,7 @@ import { SettingsCard } from '../components/ui/SettingsCard';
 import { SegmentedControl } from '../components/ui/SegmentedControl';
 import { OpacitySlider } from '../components/ui/OpacitySlider';
 
-type OnboardingState = 'CHECKING' | 'ONBOARDING_OVERLAY' | 'ONBOARDING_USAGE' | 'READY' | 'ERROR';
+type OnboardingState = 'CHECKING' | 'READY' | 'ERROR';
 type ScreenState = 'SETTINGS' | 'APPEARANCE' | 'APPS' | 'ABOUT' | 'PRIVACY';
 
 export default function HomeScreen() {
@@ -24,6 +25,12 @@ export default function HomeScreen() {
   const [searchQuery, setSearchQuery] = useState('');
   const [onboardingState, setOnboardingState] = useState<OnboardingState>('CHECKING');
   const [errorMessage, setErrorMessage] = useState('');
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState<1 | 2>(1);
+  const isInitialMount = useRef(true);
+  const onboardingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isNavigatingToSettings = useRef(false);
+  const isReminderTimerActive = useRef(false);
   const [switcherStyle, setSwitcherStyle] = useState<'with_dock' | 'without_dock'>('with_dock');
   const [isDarkMode, setIsDarkMode] = useState(false);
   const [dockBackgroundColor, setDockBackgroundColor] = useState('#1C1C1E');
@@ -35,6 +42,52 @@ export default function HomeScreen() {
   const sectionLayouts = useRef<{ [key: string]: number }>({});
   const drawerSlideAnim = useRef(new Animated.Value(-300)).current;
   const drawerFadeAnim = useRef(new Animated.Value(0)).current;
+  
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const toastOpacity = useRef(new Animated.Value(0)).current;
+  const toastSlideY = useRef(new Animated.Value(20)).current;
+  const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const showToast = (message: string) => {
+    if (toastTimeoutRef.current) {
+      clearTimeout(toastTimeoutRef.current);
+    }
+    setToastMessage(message);
+    toastOpacity.setValue(0);
+    toastSlideY.setValue(20);
+
+    Animated.parallel([
+      Animated.timing(toastOpacity, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.timing(toastSlideY, {
+        toValue: 0,
+        duration: 200,
+        easing: Easing.out(Easing.ease),
+        useNativeDriver: true,
+      })
+    ]).start();
+    
+    toastTimeoutRef.current = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(toastOpacity, {
+          toValue: 0,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.timing(toastSlideY, {
+          toValue: 20,
+          duration: 300,
+          easing: Easing.in(Easing.ease),
+          useNativeDriver: true,
+        })
+      ]).start(() => {
+        setToastMessage(null);
+      });
+    }, 1500);
+  };
 
   const scrollToSection = (sectionId: string) => {
     const y = sectionLayouts.current[sectionId];
@@ -94,7 +147,30 @@ export default function HomeScreen() {
     });
   };
 
-  const checkPermissions = () => {
+  const startReminderTimer = () => {
+    if (onboardingTimeoutRef.current) {
+      clearTimeout(onboardingTimeoutRef.current);
+    }
+    isReminderTimerActive.current = true;
+    onboardingTimeoutRef.current = setTimeout(() => {
+      isReminderTimerActive.current = false;
+      const perm = QuickAppSwitcherOverlayModule.checkOverlayPermission();
+      let usagePerm = false;
+      if (typeof QuickAppSwitcherOverlayModule.hasUsageAccess === 'function') {
+        usagePerm = QuickAppSwitcherOverlayModule.hasUsageAccess();
+      }
+      
+      setHasPermission(perm);
+      setHasUsageAccess(usagePerm);
+
+      if (!perm || !usagePerm) {
+        setOnboardingStep(!perm ? 1 : 2);
+        setShowOnboarding(true);
+      }
+    }, 10000);
+  };
+
+  const checkPermissions = async () => {
     try {
       const perm = QuickAppSwitcherOverlayModule.checkOverlayPermission();
       setHasPermission(perm);
@@ -105,12 +181,37 @@ export default function HomeScreen() {
         setHasUsageAccess(usagePerm);
       }
 
-      if (!perm) {
-        setOnboardingState('ONBOARDING_OVERLAY');
-      } else if (!usagePerm) {
-        setOnboardingState('ONBOARDING_USAGE');
+      setOnboardingState('READY');
+
+      if (!perm || !usagePerm) {
+        setIsOverlayRunning(false);
+        QuickAppSwitcherOverlayModule.stopOverlay();
       } else {
-        setOnboardingState('READY');
+        if (onboardingTimeoutRef.current) {
+          clearTimeout(onboardingTimeoutRef.current);
+          onboardingTimeoutRef.current = null;
+        }
+        isReminderTimerActive.current = false;
+        setShowOnboarding(false);
+      }
+
+      if (perm && usagePerm) {
+        return;
+      }
+
+      setOnboardingStep(!perm ? 1 : 2);
+
+      if (isInitialMount.current) {
+        isInitialMount.current = false;
+        if (onboardingTimeoutRef.current) {
+          clearTimeout(onboardingTimeoutRef.current);
+        }
+        onboardingTimeoutRef.current = setTimeout(() => {
+          setShowOnboarding(true);
+        }, 3000);
+      } else if (isNavigatingToSettings.current) {
+        isNavigatingToSettings.current = false;
+        setShowOnboarding(true);
       }
     } catch (error: any) {
       console.error("Error checking permissions:", error);
@@ -181,9 +282,24 @@ export default function HomeScreen() {
     const subscription = AppState.addEventListener('change', nextAppState => {
       if (nextAppState === 'active') {
         checkPermissions();
+        if (isReminderTimerActive.current) {
+          startReminderTimer();
+        }
+      } else if (nextAppState === 'background' || nextAppState === 'inactive') {
+        if (onboardingTimeoutRef.current) {
+          clearTimeout(onboardingTimeoutRef.current);
+        }
       }
     });
-    return () => subscription.remove();
+    return () => {
+      subscription.remove();
+      if (onboardingTimeoutRef.current) {
+        clearTimeout(onboardingTimeoutRef.current);
+      }
+      if (toastTimeoutRef.current) {
+        clearTimeout(toastTimeoutRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -204,10 +320,12 @@ export default function HomeScreen() {
   }, [activeScreen]);
 
   const requestPermission = () => {
+    isNavigatingToSettings.current = true;
     QuickAppSwitcherOverlayModule.requestOverlayPermission();
   };
 
   const requestUsageAccess = () => {
+    isNavigatingToSettings.current = true;
     if (typeof QuickAppSwitcherOverlayModule.requestUsageAccess === 'function') {
       QuickAppSwitcherOverlayModule.requestUsageAccess();
     }
@@ -224,8 +342,43 @@ export default function HomeScreen() {
   };
 
   const toggleOverlay = (value: boolean) => {
-    if (value) startOverlay();
-    else stopOverlay();
+    if (value) {
+      const perm = QuickAppSwitcherOverlayModule.checkOverlayPermission();
+      let usagePerm = false;
+      if (typeof QuickAppSwitcherOverlayModule.hasUsageAccess === 'function') {
+        usagePerm = QuickAppSwitcherOverlayModule.hasUsageAccess();
+      }
+
+      setHasPermission(perm);
+      setHasUsageAccess(usagePerm);
+
+      if (!perm || !usagePerm) {
+        let title = "Permission Required";
+        let message = "AA App Switcher needs Overlay Permission and Usage Access to activate App Switcher.";
+        
+        if (!perm && usagePerm) {
+          message = "Overlay Permission is currently OFF. Please enable it to activate App Switcher.";
+        } else if (perm && !usagePerm) {
+          message = "Usage Access is currently OFF. Please enable it to activate App Switcher.";
+        }
+
+        Alert.alert(title, message, [
+          {
+            text: "OK",
+            onPress: () => {
+              setOnboardingStep(!perm ? 1 : 2);
+              setShowOnboarding(true);
+            }
+          }
+        ]);
+        return;
+      }
+      startOverlay();
+      showToast('✓ App Switcher Activated');
+    } else {
+      stopOverlay();
+      showToast('✓ App Switcher Deactivated');
+    }
   };
 
   const handleBehaviorChange = (behavior: 'hide' | 'show') => {
@@ -240,6 +393,7 @@ export default function HomeScreen() {
     if (typeof QuickAppSwitcherOverlayModule.setSwitcherStyle === 'function') {
       QuickAppSwitcherOverlayModule.setSwitcherStyle(style);
     }
+    showToast(style === 'with_dock' ? '✓ With Dock Enabled' : '✓ Dock Enabled');
   };
 
   const handleDarkModeChange = (value: boolean) => {
@@ -317,6 +471,11 @@ export default function HomeScreen() {
     return app?.icon ? `data:image/png;base64,${app.icon}` : null;
   };
 
+  const handleCancelOnboarding = () => {
+    setShowOnboarding(false);
+    startReminderTimer();
+  };
+
   if (onboardingState === 'ERROR') {
     return (
       <View style={styles.container}>
@@ -333,34 +492,6 @@ export default function HomeScreen() {
     return (
       <View style={styles.container}>
         <ActivityIndicator size="large" color={Theme.colors.accent} />
-      </View>
-    );
-  }
-
-  if (onboardingState === 'ONBOARDING_OVERLAY') {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Overlay Permission</Text>
-        <Text style={styles.description}>
-          AA App Switcher needs permission to display the floating app switcher over other apps.
-        </Text>
-        <TouchableOpacity onPress={requestPermission} style={styles.buttonPrimary}>
-          <Text style={styles.buttonText}>Allow Overlay</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  if (onboardingState === 'ONBOARDING_USAGE') {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.title}>Usage Access</Text>
-        <Text style={styles.description}>
-          AA App Switcher uses Usage Access to know which app is currently open.
-        </Text>
-        <TouchableOpacity onPress={requestUsageAccess} style={styles.buttonPrimary}>
-          <Text style={styles.buttonText}>Allow Usage Access</Text>
-        </TouchableOpacity>
       </View>
     );
   }
@@ -926,6 +1057,49 @@ export default function HomeScreen() {
     </Modal>
   );
 
+  const renderOnboardingModal = () => {
+    return (
+      <Modal
+        visible={showOnboarding}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={handleCancelOnboarding}
+      >
+        <View style={styles.onboardingBackdrop}>
+          <View style={[styles.onboardingSheet, { backgroundColor: currentTheme.colors.surface }]}>
+            <View style={styles.onboardingContent}>
+              <Text style={[styles.onboardingTitle, { color: currentTheme.colors.textPrimary }]}>
+                {onboardingStep === 1 ? 'Step 1/2: Overlay Permission' : 'Step 2/2: Usage Access'}
+              </Text>
+              
+              <Text style={[styles.onboardingDescription, { color: currentTheme.colors.textSecondary }]}>
+                {onboardingStep === 1 
+                  ? 'Quick App Switcher needs this permission to display its floating app switcher interface over other apps. This allows you to quickly switch between apps from anywhere.'
+                  : 'Quick App Switcher uses Usage Access to determine which app is currently open. This information is needed to build your recent apps list and enable fast switching.'}
+              </Text>
+
+              <View style={styles.onboardingButtonGroup}>
+                <TouchableOpacity 
+                  style={[styles.onboardingButton, styles.onboardingButtonSecondary]} 
+                  onPress={handleCancelOnboarding}
+                >
+                  <Text style={[styles.onboardingButtonText, { color: currentTheme.colors.textPrimary }]}>CANCEL</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={[styles.onboardingButton, styles.onboardingButtonPrimary, { backgroundColor: currentTheme.colors.accent }]} 
+                  onPress={onboardingStep === 1 ? requestPermission : requestUsageAccess}
+                >
+                  <Text style={styles.onboardingButtonPrimaryText}>OK</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+    );
+  };
+
   return (
     <ThemeContext.Provider value={{ isDarkMode, theme: currentTheme, typography: currentTypography }}>
       <SafeAreaView style={[styles.safeArea, { backgroundColor: currentTheme.colors.background }]}>
@@ -933,6 +1107,19 @@ export default function HomeScreen() {
         {renderAppPickerModal()}
         {renderColorPickerModal()}
         {renderDrawerModal()}
+        {renderOnboardingModal()}
+        {toastMessage && (
+          <Animated.View style={[
+            styles.toastContainer, 
+            { 
+              opacity: toastOpacity, 
+              transform: [{ translateY: toastSlideY }],
+              backgroundColor: isDarkMode ? '#333333' : '#333333'
+            }
+          ]}>
+            <Text style={styles.toastText}>{toastMessage}</Text>
+          </Animated.View>
+        )}
       </SafeAreaView>
     </ThemeContext.Provider>
   );
@@ -1194,5 +1381,81 @@ const styles = StyleSheet.create({
   },
   pickerAppName: {
     ...Theme.typography.label,
+  },
+  onboardingBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'flex-end',
+  },
+  onboardingSheet: {
+    backgroundColor: Theme.colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 32,
+    paddingBottom: 48,
+    ...Theme.shadow.card,
+    elevation: 24,
+  },
+  onboardingContent: {
+    alignItems: 'flex-start',
+  },
+  onboardingTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    marginBottom: 12,
+  },
+  onboardingDescription: {
+    fontSize: 16,
+    lineHeight: 24,
+    marginBottom: 32,
+  },
+  onboardingButtonGroup: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    width: '100%',
+    gap: 12,
+  },
+  onboardingButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  onboardingButtonSecondary: {
+    backgroundColor: 'transparent',
+  },
+  onboardingButtonPrimary: {
+    backgroundColor: Theme.colors.accent,
+  },
+  onboardingButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  onboardingButtonPrimaryText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  toastContainer: {
+    position: 'absolute',
+    bottom: 40,
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: '#323232',
+    elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 5,
+    zIndex: 9999,
+  },
+  toastText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
   }
 });
