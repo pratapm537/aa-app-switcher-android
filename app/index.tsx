@@ -656,7 +656,7 @@ export default function HomeScreen() {
       setSelectedApps(tempSelectedApps);
     }
     setIsPickerVisible(false);
-    setSearchQuery("");
+    // Remove setSearchQuery("") here to prevent state updates racing with modal close
   };
 
   const toggleAppSelection = (packageName: string) => {
@@ -996,6 +996,7 @@ export default function HomeScreen() {
                   },
                 ]}
                 onPress={() => {
+                  setSearchQuery("");
                   setTempSelectedApps([...selectedApps]);
                   setIsPickerVisible(true);
                 }}
@@ -1680,7 +1681,11 @@ export default function HomeScreen() {
           >
             Select Apps
           </Text>
-          <TouchableOpacity onPress={commitSelection}>
+          <TouchableOpacity
+            onPress={commitSelection}
+            hitSlop={{ top: 20, right: 20, bottom: 20, left: 20 }}
+            style={{ paddingHorizontal: 14, paddingVertical: 8 }}
+          >
             <Text style={styles.closeText}>Done</Text>
           </TouchableOpacity>
         </View>
@@ -1723,6 +1728,7 @@ export default function HomeScreen() {
         </View>
 
         <FlatList
+          keyboardShouldPersistTaps="handled"
           data={installedApps.filter((app) => {
             const trimmedQuery = searchQuery.trim();
             if (trimmedQuery.length === 0) return true;
