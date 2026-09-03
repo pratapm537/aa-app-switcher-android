@@ -712,7 +712,7 @@ class OverlayService : Service() {
                 val targetHeight = if (isVertical) targetSize else initialHeight
                 
                 val animator = android.animation.ValueAnimator.ofFloat(0f, 1f)
-                animator.duration = 350
+                animator.duration = 300
                 animator.interpolator = android.view.animation.AccelerateDecelerateInterpolator()
                 
                 animator.addUpdateListener { anim ->
@@ -747,7 +747,7 @@ class OverlayService : Service() {
                 activeAnimator = animator
                 animator.start()
             }
-            handler.postDelayed(feedbackAnimationRunnable!!, 1700)
+            handler.postDelayed(feedbackAnimationRunnable!!, 700)
             
         } else if (type == "without_dock_intro") {
             prefs.edit().putString("switcher_style", "without_dock").apply()
