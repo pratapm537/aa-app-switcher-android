@@ -18,6 +18,7 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
+  Share,
 } from "react-native";
 import { OpacitySlider } from "../components/ui/OpacitySlider";
 import { ScreenHeader } from "../components/ui/ScreenHeader";
@@ -31,6 +32,7 @@ import {
   ThemeContext,
   getTypography,
 } from "../theme/theme";
+import { SymbolView } from "expo-symbols";
 
 type OnboardingState = "CHECKING" | "READY" | "ERROR";
 type ScreenState = "SETTINGS" | "APPEARANCE" | "APPS" | "ABOUT" | "PRIVACY";
@@ -1814,6 +1816,31 @@ export default function HomeScreen() {
               >
                 <Text style={{ ...currentTypography.label, fontSize: 16 }}>
                   Privacy Policy
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ paddingVertical: 16, paddingHorizontal: 24, flexDirection: "row", alignItems: "center" }}
+                onPress={async () => {
+                  closeDrawer(); // Close drawer before sharing
+                  try {
+                    await Share.share({
+                      title: "AA App Switcher",
+                      message: "AA App Switcher\nQuickly switch between your favorite apps from anywhere.",
+                    });
+                  } catch (e) {
+                    console.error("Share failed", e);
+                  }
+                }}
+              >
+                <SymbolView 
+                  name={{ ios: "square.and.arrow.up", android: "share" }} 
+                  size={20} 
+                  tintColor={currentTheme.colors.textPrimary} 
+                  style={{ marginRight: 12 }} 
+                  fallback={<Text style={{ fontSize: 20, marginRight: 12, color: currentTheme.colors.textPrimary }}>🔗</Text>}
+                />
+                <Text style={{ ...currentTypography.label, fontSize: 16 }}>
+                  Share
                 </Text>
               </TouchableOpacity>
             </View>
