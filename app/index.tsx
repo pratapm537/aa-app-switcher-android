@@ -1,3 +1,4 @@
+import { SymbolView } from "expo-symbols";
 import { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -11,6 +12,7 @@ import {
   Modal,
   SafeAreaView,
   ScrollView,
+  Share,
   StyleSheet,
   Switch,
   Text,
@@ -18,7 +20,6 @@ import {
   TouchableOpacity,
   TouchableWithoutFeedback,
   View,
-  Share,
 } from "react-native";
 import { OpacitySlider } from "../components/ui/OpacitySlider";
 import { ScreenHeader } from "../components/ui/ScreenHeader";
@@ -32,7 +33,15 @@ import {
   ThemeContext,
   getTypography,
 } from "../theme/theme";
-import { SymbolView } from "expo-symbols";
+
+import Constants from "expo-constants";
+import * as Linking from "expo-linking";
+
+const UPDATE_TEST_MODE = false;
+const UPDATE_CHECK_URL =
+  "https://raw.githubusercontent.com/pratapm537/aa-app-switcher/main/version.json";
+let lastUpdateCheckTime = 0;
+let cachedLatestVersion: string | null = null;
 
 type OnboardingState = "CHECKING" | "READY" | "ERROR";
 type ScreenState = "SETTINGS" | "APPEARANCE" | "APPS" | "ABOUT" | "PRIVACY";
@@ -58,6 +67,117 @@ export default function HomeScreen() {
   const [errorMessage, setErrorMessage] = useState("");
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [onboardingStep, setOnboardingStep] = useState<1 | 2>(1);
+
+  const installedVersion = Constants.expoConfig?.version || "1.0.0";
+  const [latestVersion, setLatestVersion] = useState<string | null>(
+    cachedLatestVersion,
+  );
+  const [isUpdateAvailable, setIsUpdateAvailable] = useState<boolean>(false);
+  const pulseAnim = useRef(new Animated.Value(0.4)).current;
+
+  const isNewerVersion = (current: string, remote: string) => {
+    try {
+      const c = current.split(".").map(Number);
+      const r = remote.split(".").map(Number);
+      for (let i = 0; i < Math.max(c.length, r.length); i++) {
+        const cVal = c[i] || 0;
+        const rVal = r[i] || 0;
+        if (rVal > cVal) return true;
+        if (cVal > rVal) return false;
+      }
+      return false;
+    } catch {
+      return false;
+    }
+  };
+
+  const checkUpdate = async () => {
+    const now = Date.now();
+    if (
+      !UPDATE_TEST_MODE &&
+      now - lastUpdateCheckTime < 3600000 &&
+      cachedLatestVersion
+    ) {
+      if (isNewerVersion(installedVersion, cachedLatestVersion)) {
+        setLatestVersion(cachedLatestVersion);
+        setIsUpdateAvailable(true);
+      }
+      return;
+    }
+    lastUpdateCheckTime = now;
+    if (UPDATE_TEST_MODE) {
+      const mockLatest = "9.9.9";
+      cachedLatestVersion = mockLatest;
+      setLatestVersion(mockLatest);
+      setIsUpdateAvailable(true);
+      return;
+    }
+    try {
+      const response = await fetch(UPDATE_CHECK_URL);
+      if (!response.ok) return;
+      const data = await response.json();
+      const remoteVersion = data.latestVersion;
+      if (
+        typeof remoteVersion === "string" &&
+        /^\d+\.\d+\.\d+$/.test(remoteVersion)
+      ) {
+        cachedLatestVersion = remoteVersion;
+        if (isNewerVersion(installedVersion, remoteVersion)) {
+          setLatestVersion(remoteVersion);
+          setIsUpdateAvailable(true);
+        }
+      }
+    } catch (e) {
+      // silent fail
+    }
+  };
+
+  useEffect(() => {
+    checkUpdate();
+    const subscription = AppState.addEventListener("change", (nextAppState) => {
+      if (nextAppState === "active") {
+        checkUpdate();
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
+  useEffect(() => {
+    if (isUpdateAvailable) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 0.4,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ]),
+      ).start();
+    }
+  }, [isUpdateAvailable]);
+
+  const handleUpdatePress = async () => {
+    const pkg = "com.anonymous.QuickAppSwitcher";
+    const marketUrl = `market://details?id=${pkg}`;
+    const webUrl = `https://play.google.com/store/apps/details?id=${pkg}`;
+    try {
+      const canOpen = await Linking.canOpenURL(marketUrl);
+      if (canOpen) {
+        await Linking.openURL(marketUrl);
+      } else {
+        await Linking.openURL(webUrl);
+      }
+    } catch (e) {
+      try {
+        await Linking.openURL(webUrl);
+      } catch (e2) {}
+    }
+  };
   const isInitialMount = useRef(true);
   const onboardingTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null,
@@ -718,6 +838,60 @@ export default function HomeScreen() {
             >
               <Text style={{ color: "#ffffff", fontSize: 20 }}>▼</Text>
             </View>
+          )}
+        </View>
+
+        {/* Update Indicator */}
+        <View
+          style={{ alignItems: "center", marginTop: currentTheme.spacing.md }}
+        >
+          {!isUpdateAvailable ? (
+            <Text
+              style={{
+                ...currentTheme.typography.smallLabel,
+                color: currentTheme.colors.textSecondary,
+              }}
+            >
+              Version {installedVersion}
+            </Text>
+          ) : (
+            <TouchableOpacity
+              onPress={handleUpdatePress}
+              activeOpacity={0.7}
+              style={{ alignItems: "center" }}
+            >
+              <Animated.View
+                style={{
+                  backgroundColor: "rgba(255, 59, 48, 0.1)",
+                  paddingVertical: 6,
+                  paddingHorizontal: 12,
+                  borderRadius: 100,
+                  borderWidth: 1,
+                  borderColor: "rgba(255, 59, 48, 0.3)",
+                  opacity: pulseAnim,
+                }}
+              >
+                <Text
+                  style={{
+                    color: "#FF3B30",
+                    fontSize: 12,
+                    fontWeight: "700",
+                    letterSpacing: 0.5,
+                  }}
+                >
+                  UPDATE AVAILABLE
+                </Text>
+              </Animated.View>
+              <Text
+                style={{
+                  ...currentTheme.typography.smallLabel,
+                  color: "#FF3B30",
+                  marginTop: 4,
+                }}
+              >
+                Version {latestVersion} available
+              </Text>
+            </TouchableOpacity>
           )}
         </View>
       </View>
@@ -1819,25 +1993,41 @@ export default function HomeScreen() {
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={{ paddingVertical: 16, paddingHorizontal: 24, flexDirection: "row", alignItems: "center" }}
+                style={{
+                  paddingVertical: 16,
+                  paddingHorizontal: 24,
+                  flexDirection: "row",
+                  alignItems: "center",
+                }}
                 onPress={async () => {
                   closeDrawer(); // Close drawer before sharing
                   try {
                     await Share.share({
                       title: "AA App Switcher",
-                      message: "AA App Switcher\nQuickly switch between your favorite apps from anywhere.",
+                      message:
+                        "AA App Switcher\nQuickly switch between your favorite apps from anywhere.",
                     });
                   } catch (e) {
                     console.error("Share failed", e);
                   }
                 }}
               >
-                <SymbolView 
-                  name={{ ios: "square.and.arrow.up", android: "share" }} 
-                  size={20} 
-                  tintColor={currentTheme.colors.textPrimary} 
-                  style={{ marginRight: 12 }} 
-                  fallback={<Text style={{ fontSize: 20, marginRight: 12, color: currentTheme.colors.textPrimary }}>🔗</Text>}
+                <SymbolView
+                  name={{ ios: "square.and.arrow.up", android: "share" }}
+                  size={20}
+                  tintColor={currentTheme.colors.textPrimary}
+                  style={{ marginRight: 12 }}
+                  fallback={
+                    <Text
+                      style={{
+                        fontSize: 20,
+                        marginRight: 12,
+                        color: currentTheme.colors.textPrimary,
+                      }}
+                    >
+                      🔗
+                    </Text>
+                  }
                 />
                 <Text style={{ ...currentTypography.label, fontSize: 16 }}>
                   Share
