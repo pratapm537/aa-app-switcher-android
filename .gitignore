@@ -43,3 +43,7 @@ yarn-error.*
 # Generated build artifacts
 **/build/
 **/.gradle/
+
+analyze_apk.py
+analyze_apk2.py
+gcm-diagnose.log
