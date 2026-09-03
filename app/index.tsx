@@ -162,7 +162,7 @@ export default function HomeScreen() {
   }, [isUpdateAvailable]);
 
   const handleUpdatePress = async () => {
-    const pkg = "com.anonymous.QuickAppSwitcher";
+    const pkg = "com.aaappswitcher.app";
     const marketUrl = `market://details?id=${pkg}`;
     const webUrl = `https://play.google.com/store/apps/details?id=${pkg}`;
     try {
