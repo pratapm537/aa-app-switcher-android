@@ -26,6 +26,7 @@ declare class QuickAppSwitcherOverlayModule extends NativeModule<{}> {
   setDarkMode(value: boolean): void;
   getDockBackgroundColor(): string;
   setDockBackgroundColor(color: string): void;
+  playFeedbackAnimation(type: "with_dock_intro" | "without_dock_intro"): void;
 }
 
 export default requireNativeModule<QuickAppSwitcherOverlayModule>('QuickAppSwitcherOverlay');

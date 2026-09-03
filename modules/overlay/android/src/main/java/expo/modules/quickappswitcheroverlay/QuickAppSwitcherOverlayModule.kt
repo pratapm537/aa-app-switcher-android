@@ -197,6 +197,7 @@ class QuickAppSwitcherOverlayModule : Module() {
       if (context != null) {
           android.util.Log.d("QuickAppSwitcherOverlay", "Switcher style preference changed: $value")
           val intent = Intent("expo.modules.quickappswitcheroverlay.UPDATE_SWITCHER_STYLE")
+          intent.putExtra("new_style", value)
           intent.setPackage(context.packageName)
           context.sendBroadcast(intent)
       }
@@ -320,6 +321,15 @@ class QuickAppSwitcherOverlayModule : Module() {
       if (context != null) {
           android.util.Log.d("QuickAppSwitcherOverlay", "Selected apps updated via saveSelectedApps")
           val intent = Intent("expo.modules.quickappswitcheroverlay.UPDATE_SELECTED_APPS")
+          intent.setPackage(context.packageName)
+          context.sendBroadcast(intent)
+      }
+    }
+    Function("playFeedbackAnimation") { type: String ->
+      val context = appContext.reactContext
+      if (context != null) {
+          val intent = Intent("expo.modules.quickappswitcheroverlay.PLAY_FEEDBACK_ANIMATION")
+          intent.putExtra("animation_type", type)
           intent.setPackage(context.packageName)
           context.sendBroadcast(intent)
       }

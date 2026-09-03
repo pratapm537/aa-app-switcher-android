@@ -59,10 +59,21 @@ class OverlayService : Service() {
                 rebuildIcons()
             } else if (intent?.action == "expo.modules.quickappswitcheroverlay.UPDATE_SWITCHER_STYLE") {
                 Log.d("QuickAppSwitcherOverlay", "UPDATE_SWITCHER_STYLE received")
-                rebuildIcons()
+                val prefs = getSharedPreferences("QuickAppSwitcherPrefs", Context.MODE_PRIVATE)
+                val newStyle = intent.getStringExtra("new_style") ?: prefs.getString("switcher_style", "with_dock") ?: "with_dock"
+                val layout = overlayView as? LinearLayout
+                
+                if (layout != null && layout.visibility == View.VISIBLE) {
+                    playFeedbackAnimation(if (newStyle == "with_dock") "with_dock_intro" else "without_dock_intro")
+                } else {
+                    rebuildIcons()
+                }
             } else if (intent?.action == "expo.modules.quickappswitcheroverlay.UPDATE_DOCK_COLOR") {
                 Log.d("QuickAppSwitcherOverlay", "UPDATE_DOCK_COLOR received")
                 rebuildIcons()
+            } else if (intent?.action == "expo.modules.quickappswitcheroverlay.PLAY_FEEDBACK_ANIMATION") {
+                val type = intent.getStringExtra("animation_type")
+                playFeedbackAnimation(type)
             }
         }
     }
@@ -483,6 +494,17 @@ class OverlayService : Service() {
         })
 
         windowManager.addView(overlayView, params)
+        
+        // Trigger intro if starting with_dock
+        val style = prefs.getString("switcher_style", "with_dock") ?: "with_dock"
+        if (style == "with_dock") {
+            handler.postDelayed({
+                val currentLayout = overlayView as? LinearLayout
+                if (currentLayout != null && currentLayout.visibility == View.VISIBLE) {
+                    playFeedbackAnimation("with_dock_intro")
+                }
+            }, 300)
+        }
     }
 
     private fun createButton(colorHex: String, packageName: String, index: Int, containerDp: Int, iconDp: Int, spacingPx: Int, switcherStyle: String, isVertical: Boolean, isFirst: Boolean): View {
@@ -636,6 +658,144 @@ class OverlayService : Service() {
             rebuildIcons()
         }
         return container
+    }
+
+    private var feedbackAnimationRunnable: Runnable? = null
+    private var activeAnimator: android.animation.ValueAnimator? = null
+
+    private fun playFeedbackAnimation(type: String?) {
+        val layout = overlayView as? LinearLayout ?: return
+        val prefs = getSharedPreferences("QuickAppSwitcherPrefs", Context.MODE_PRIVATE)
+        val opacityPref = prefs.getFloat("overlay_opacity", 0.85f)
+        
+        feedbackAnimationRunnable?.let { handler.removeCallbacks(it) }
+        activeAnimator?.cancel()
+        layout.animate().cancel()
+        layout.layoutTransition = null
+        
+        if (type == "with_dock_intro") {
+            prefs.edit().putBoolean("overlay_expanded", true).apply()
+            prefs.edit().putString("switcher_style", "with_dock").apply()
+            
+            val initialParams = layout.layoutParams as? WindowManager.LayoutParams
+            if (initialParams != null) {
+                initialParams.width = WindowManager.LayoutParams.WRAP_CONTENT
+                initialParams.height = WindowManager.LayoutParams.WRAP_CONTENT
+            }
+            
+            layout.alpha = 1.0f
+            rebuildIcons()
+            
+            feedbackAnimationRunnable = Runnable {
+                val initialWidth = layout.width
+                val initialHeight = layout.height
+                if (initialWidth <= 0 || initialHeight <= 0) {
+                    prefs.edit().putBoolean("overlay_expanded", false).apply()
+                    layout.alpha = opacityPref
+                    rebuildIcons()
+                    return@Runnable
+                }
+                
+                val iconSizePref = prefs.getString("overlay_icon_size", "small") ?: "small"
+                val containerDp = when (iconSizePref) {
+                    "small" -> 30
+                    "large" -> 44
+                    else -> 36
+                }
+                val density = resources.displayMetrics.density
+                val containerPx = (containerDp * density).toInt()
+                val p = (8 * density).toInt()
+                val targetSize = containerPx + 2 * p
+                
+                val isVertical = layout.orientation == android.widget.LinearLayout.VERTICAL
+                val targetWidth = if (isVertical) initialWidth else targetSize
+                val targetHeight = if (isVertical) targetSize else initialHeight
+                
+                val animator = android.animation.ValueAnimator.ofFloat(0f, 1f)
+                animator.duration = 350
+                animator.interpolator = android.view.animation.AccelerateDecelerateInterpolator()
+                
+                animator.addUpdateListener { anim ->
+                    val fraction = anim.animatedFraction
+                    val currentW = initialWidth - ((initialWidth - targetWidth) * fraction).toInt()
+                    val currentH = initialHeight - ((initialHeight - targetHeight) * fraction).toInt()
+                    
+                    val params = layout.layoutParams as? WindowManager.LayoutParams
+                    if (params != null && layout.isAttachedToWindow) {
+                        params.width = currentW
+                        params.height = currentH
+                        layout.alpha = 1.0f - (fraction * (1.0f - opacityPref))
+                        try {
+                            windowManager.updateViewLayout(layout, params)
+                        } catch (e: Exception) {}
+                    }
+                }
+                
+                animator.addListener(object : android.animation.AnimatorListenerAdapter() {
+                    override fun onAnimationEnd(animation: android.animation.Animator) {
+                        prefs.edit().putBoolean("overlay_expanded", false).apply()
+                        layout.alpha = opacityPref
+                        val pEnd = layout.layoutParams as? WindowManager.LayoutParams
+                        if (pEnd != null) {
+                            pEnd.width = WindowManager.LayoutParams.WRAP_CONTENT
+                            pEnd.height = WindowManager.LayoutParams.WRAP_CONTENT
+                        }
+                        rebuildIcons()
+                    }
+                })
+                
+                activeAnimator = animator
+                animator.start()
+            }
+            handler.postDelayed(feedbackAnimationRunnable!!, 1700)
+            
+        } else if (type == "without_dock_intro") {
+            prefs.edit().putString("switcher_style", "without_dock").apply()
+            val initialParams = layout.layoutParams as? WindowManager.LayoutParams
+            if (initialParams != null) {
+                initialParams.width = WindowManager.LayoutParams.WRAP_CONTENT
+                initialParams.height = WindowManager.LayoutParams.WRAP_CONTENT
+            }
+            layout.alpha = 1f
+            rebuildIcons()
+            
+            val animator = android.animation.ValueAnimator.ofFloat(0f, 1f)
+            animator.startDelay = 200
+            animator.duration = 800
+            animator.interpolator = android.view.animation.LinearInterpolator()
+            
+            animator.addUpdateListener { anim ->
+                val fraction = anim.animatedFraction
+                val currentAlpha = if (fraction <= 0.5f) {
+                    1f - (fraction * 2f)
+                } else {
+                    ((fraction - 0.5f) * 2f) * opacityPref
+                }
+                
+                layout.alpha = currentAlpha
+                val params = layout.layoutParams as? WindowManager.LayoutParams
+                if (params != null && layout.isAttachedToWindow) {
+                    try {
+                        windowManager.updateViewLayout(layout, params)
+                    } catch (e: Exception) {}
+                }
+            }
+            
+            animator.addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    layout.alpha = opacityPref
+                    val pEnd = layout.layoutParams as? WindowManager.LayoutParams
+                    if (pEnd != null && layout.isAttachedToWindow) {
+                        try {
+                            windowManager.updateViewLayout(layout, pEnd)
+                        } catch (e: Exception) {}
+                    }
+                }
+            })
+            
+            activeAnimator = animator
+            animator.start()
+        }
     }
 
     private fun rebuildIcons() {
