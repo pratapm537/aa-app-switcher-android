@@ -2011,7 +2011,7 @@ export default function HomeScreen() {
                     await Share.share({
                       title: "AA App Switcher",
                       message:
-                        "AA App Switcher\nQuickly switch between your favorite apps from anywhere.",
+                        "AA App Switcher\nQuickly switch between your favorite apps from anywhere.\n\nDownload AA App Switcher:\nhttps://play.google.com/store/apps/details?id=com.aaappswitcher.app",
                     });
                   } catch (e) {
                     console.error("Share failed", e);

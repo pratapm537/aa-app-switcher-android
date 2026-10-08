@@ -460,6 +460,9 @@ class OverlayService : Service() {
         rebuildIcons()
 
         layout.viewTreeObserver.addOnGlobalLayoutListener(object : android.view.ViewTreeObserver.OnGlobalLayoutListener {
+            private var lastScreenWidth = -1
+            private var lastScreenHeight = -1
+
             override fun onGlobalLayout() {
                 if (layout.width > 0 && layout.height > 0) {
                     val currentMetrics = resources.displayMetrics
@@ -469,6 +472,63 @@ class OverlayService : Service() {
                     val maxX = Math.max(0, currentScreenWidth - layout.width)
                     val maxY = Math.max(0, currentScreenHeight - layout.height)
                     var changed = false
+
+                    if (lastScreenWidth == -1) {
+                        lastScreenWidth = currentScreenWidth
+                        lastScreenHeight = currentScreenHeight
+                    } else if (lastScreenWidth != currentScreenWidth || lastScreenHeight != currentScreenHeight) {
+                        val oldMaxX = Math.max(1, lastScreenWidth - layout.width)
+                        val oldMaxY = Math.max(1, lastScreenHeight - layout.height)
+                        
+                        val prefs = getSharedPreferences("QuickAppSwitcherPrefs", Context.MODE_PRIVATE)
+                        val switcherStyle = prefs.getString("switcher_style", "with_dock") ?: "with_dock"
+                        val edge = prefs.getString("overlay_edge", "none") ?: "none"
+                        val edgeMargin = (16 * currentMetrics.density).toInt()
+
+                        var forceLeft = false
+                        var forceRight = false
+                        var forceTop = false
+                        var forceBottom = false
+
+                        if (switcherStyle == "with_dock" && edge != "none") {
+                            when (edge) {
+                                "left" -> forceLeft = true
+                                "right" -> forceRight = true
+                                "top" -> forceTop = true
+                                "bottom" -> forceBottom = true
+                            }
+                        }
+                        
+                        if (forceLeft) {
+                            params.x = edgeMargin
+                        } else if (forceRight) {
+                            params.x = Math.max(0, maxX - edgeMargin)
+                        } else if (params.x < oldMaxX / 3) {
+                            // Left anchored fallback
+                        } else if (params.x > oldMaxX * 2 / 3) {
+                            val rightMargin = oldMaxX - params.x
+                            params.x = Math.max(0, maxX - rightMargin)
+                        } else {
+                            params.x = maxX / 2
+                        }
+                        
+                        if (forceTop) {
+                            params.y = edgeMargin
+                        } else if (forceBottom) {
+                            params.y = Math.max(0, maxY - edgeMargin)
+                        } else if (params.y < oldMaxY / 3) {
+                            // Top anchored fallback
+                        } else if (params.y > oldMaxY * 2 / 3) {
+                            val bottomMargin = oldMaxY - params.y
+                            params.y = Math.max(0, maxY - bottomMargin)
+                        } else {
+                            params.y = maxY / 2
+                        }
+                        
+                        lastScreenWidth = currentScreenWidth
+                        lastScreenHeight = currentScreenHeight
+                        changed = true
+                    }
 
                     if (params.x > maxX || params.x < 0) {
                         params.x = params.x.coerceIn(0, maxX)

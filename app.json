@@ -11,6 +11,7 @@
       "supportsTablet": true
     },
     "android": {
+      "versionCode": 2,
       "adaptiveIcon": {
         "backgroundColor": "#ffffff",
         "foregroundImage": "./assets/images/aa-app-switcher-icon.png"
